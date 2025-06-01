@@ -33,7 +33,7 @@ const Register = () => {
   useEffect(() => {
     const fetchStates = async () => {
       try {
-        const response = await axios.get("https://admissionapi.buildingindiadigital.com/auth/states);
+        const response = await axios.get("https://admissionapi.buildingindiadigital.com/auth/states");
         if (response.data.success) {
           setStates(response.data.data);
         }
