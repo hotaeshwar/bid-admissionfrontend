@@ -29,16 +29,45 @@ const Login = () => {
   useEffect(() => {
     const fetchStates = async () => {
       try {
+        console.log("🔄 [LOGIN] Starting to fetch states...");
         const response = await axios.get("https://admissionapi.buildingindiadigital.com/auth/states");
+        
+        console.log("📡 [LOGIN] Full API Response:", response);
+        console.log("📊 [LOGIN] Response Data:", response.data);
+        console.log("✅ [LOGIN] Response Success Status:", response.data.success);
+        console.log("🏛️ [LOGIN] States Data:", response.data.data);
+        console.log("📏 [LOGIN] Number of states received:", response.data.data ? response.data.data.length : 0);
+        
         if (response.data.success) {
+          console.log("✅ [LOGIN] Setting states to state variable");
           setStates(response.data.data);
+          console.log("🔍 [LOGIN] States after setting:", response.data.data);
+        } else {
+          console.log("❌ [LOGIN] API returned success: false");
+          console.log("📝 [LOGIN] Error message from API:", response.data.message);
         }
       } catch (err) {
-        console.error("Failed to fetch states:", err);
+        console.error("❌ [LOGIN] Failed to fetch states:", err);
+        console.error("📋 [LOGIN] Error details:", err.response);
+        console.error("📋 [LOGIN] Error message:", err.message);
+        if (err.response) {
+          console.error("📋 [LOGIN] Error status:", err.response.status);
+          console.error("📋 [LOGIN] Error data:", err.response.data);
+        }
       }
     };
     fetchStates();
   }, []);
+
+  // Add useEffect to monitor states changes
+  useEffect(() => {
+    console.log("🔄 [LOGIN] States updated:", states);
+    console.log("📏 [LOGIN] Current states length:", states.length);
+    if (states.length > 0) {
+      console.log("🎯 [LOGIN] First state example:", states[0]);
+      console.log("🔑 [LOGIN] Keys in first state:", Object.keys(states[0]));
+    }
+  }, [states]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -173,11 +202,17 @@ const Login = () => {
                     required
                   >
                     <option value="" disabled>Select your state</option>
-                    {states.map((state) => (
-                      <option key={state.id} value={state.name}>
-                        {state.name}
-                      </option>
-                    ))}
+                    {/* Add debug info in the dropdown rendering */}
+                    {console.log("🎯 [LOGIN] Rendering dropdown options. States array:", states)}
+                    {states.length === 0 && console.log("⚠️ [LOGIN] States array is empty during render")}
+                    {states.map((state, index) => {
+                      console.log(`🏛️ [LOGIN] Rendering state ${index}:`, state);
+                      return (
+                        <option key={state.id} value={state.name}>
+                          {state.name}
+                        </option>
+                      );
+                    })}
                   </select>
                   <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-700">
                     <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
