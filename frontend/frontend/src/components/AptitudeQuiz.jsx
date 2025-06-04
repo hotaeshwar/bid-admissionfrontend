@@ -28,10 +28,9 @@ const AptitudeQuiz = () => {
     const [showInstructions, setShowInstructions] = useState(false);
     const [redirectCountdown, setRedirectCountdown] = useState(5);
     const [studentId, setStudentId] = useState("");
-    const [studentCode, setStudentCode] = useState("");
+    const [studentName, setStudentName] = useState("");
     const [authError, setAuthError] = useState("");
     const [showAuthScreen, setShowAuthScreen] = useState(true);
-    const [studentName, setStudentName] = useState("");
     const [error, setError] = useState(null);
     const timerRef = useRef(null);
     const redirectTimerRef = useRef(null);
@@ -167,8 +166,9 @@ const AptitudeQuiz = () => {
     ];
 
     // Validation functions
-    const validateStudentCode = (code) => {
-        return code.trim().length >= 3;
+    const validateStudentId = (id) => {
+        // Allow alphanumeric student IDs, minimum 3 characters
+        return id.trim().length >= 3 && /^[a-zA-Z0-9]+$/.test(id.trim());
     };
 
     const validateStudentName = (name) => {
@@ -199,7 +199,7 @@ const AptitudeQuiz = () => {
         }, 1500);
     }, []);
 
-    // Start timer when quiz begins - FIXED dependencies
+    // Start timer when quiz begins
     useEffect(() => {
         if (!showAuthScreen && !showInstructions && !isSubmitted) {
             timerRef.current = setInterval(() => {
@@ -231,32 +231,51 @@ const AptitudeQuiz = () => {
         }
     }, [isSubmitted, selectedAnswers]);
 
-    // FIXED saveQuizResult - single source of truth
+    // Enhanced saveQuizResult - saves to a format teachers can access
     const saveQuizResult = useCallback(() => {
         try {
             const percentage = Math.round((score / questions.length) * 100);
-
+            const currentDate = new Date();
+            
             const quizResult = {
                 id: Date.now().toString(),
-                quiz_name: "Aptitude Quiz",
-                score: percentage,
-                completed_date: new Date().toISOString(),
-                candidate_name: studentName,
                 student_id: studentId,
-                student_code: studentCode
+                student_name: studentName,
+                quiz_name: "Aptitude Quiz",
+                total_questions: questions.length,
+                correct_answers: score,
+                score_percentage: percentage,
+                time_taken: (30 * 60) - timeLeft, // Time taken in seconds
+                completed_date: currentDate.toISOString(),
+                completed_date_formatted: currentDate.toLocaleDateString() + ' ' + currentDate.toLocaleTimeString(),
+                answers: selectedAnswers,
+                status: 'completed'
             };
 
-            // Single consistent storage
-            const quizResultKey = `quizResult_${studentId}`;
+            // Save individual result
+            const quizResultKey = `quizResult_${studentId}_${Date.now()}`;
+            
+            // Get existing quiz results array or create new one
+            const existingResults = JSON.parse(localStorage.getItem('allQuizResults') || '[]');
+            existingResults.push(quizResult);
+            
+            // Save updated results array
+            localStorage.setItem('allQuizResults', JSON.stringify(existingResults));
             localStorage.setItem(quizResultKey, JSON.stringify(quizResult));
+            
+            // Also save for student dashboard
             localStorage.setItem('pendingQuizSubmission', JSON.stringify(quizResult));
+            
+            // Trigger storage event for real-time updates
             window.dispatchEvent(new Event('storage'));
+            
+            console.log('Quiz result saved:', quizResult);
         } catch (error) {
             handleError(error, "saveQuizResult");
         }
-    }, [score, questions.length, studentName, studentId, studentCode]);
+    }, [score, questions.length, studentName, studentId, timeLeft, selectedAnswers]);
 
-    // FIXED redirect countdown with proper cleanup
+    // Redirect countdown with proper cleanup
     useEffect(() => {
         if (showResults) {
             saveQuizResult();
@@ -302,25 +321,14 @@ const AptitudeQuiz = () => {
         }
     };
 
-    const handleRestartQuiz = () => {
-        setCurrentQuestion(0);
-        setSelectedAnswers({});
-        setTimeLeft(30 * 60);
-        setIsSubmitted(false);
-        setShowResults(false);
-        setScore(0);
-        setShowInstructions(true);
-        setRedirectCountdown(5);
-    };
-
-    // FIXED authentication logic
+    // Enhanced authentication - now uses student ID instead of code
     const handleAuthenticate = () => {
         setAuthError("");
         setError(null);
 
         // Validate inputs
-        if (!validateStudentCode(studentCode)) {
-            setAuthError("Please enter a valid student code (minimum 3 characters).");
+        if (!validateStudentId(studentId)) {
+            setAuthError("Please enter a valid student ID (minimum 3 alphanumeric characters).");
             return;
         }
 
@@ -330,42 +338,23 @@ const AptitudeQuiz = () => {
         }
 
         try {
-            const storedUser = localStorage.getItem("user");
+            // Check if student has already taken the quiz
+            const existingResults = JSON.parse(localStorage.getItem('allQuizResults') || '[]');
+            const hasAlreadyTaken = existingResults.some(result => 
+                result.student_id.toLowerCase() === studentId.toLowerCase().trim()
+            );
 
-            if (storedUser) {
-                const user = JSON.parse(storedUser);
-
-                if (studentCode.trim() === user.unique_code) {
-                    const quizResultKey = `quizResult_${user.id}`;
-                    const existingResult = localStorage.getItem(quizResultKey);
-
-                    if (existingResult) {
-                        setHasAttemptedQuiz(true);
-                        setShowAuthScreen(false);
-                        return;
-                    }
-
-                    setStudentId(user.id);
-                    setStudentName(user.first_name);
-                    setShowAuthScreen(false);
-                    setShowInstructions(true);
-                } else {
-                    setAuthError("Invalid student code. Please enter the correct code shown on your dashboard.");
-                }
-            } else {
-                // Generate proper unique ID for new user
-                const newUserId = `student_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                const newUser = {
-                    id: newUserId,
-                    first_name: studentName.trim(),
-                    unique_code: studentCode.trim()
-                };
-
-                localStorage.setItem("user", JSON.stringify(newUser));
-                setStudentId(newUserId);
+            if (hasAlreadyTaken) {
+                setHasAttemptedQuiz(true);
                 setShowAuthScreen(false);
-                setShowInstructions(true);
+                return;
             }
+
+            // Set student data and continue
+            setStudentId(studentId.trim());
+            setStudentName(studentName.trim());
+            setShowAuthScreen(false);
+            setShowInstructions(true);
         } catch (error) {
             handleError(error, "authentication");
         }
@@ -414,7 +403,7 @@ const AptitudeQuiz = () => {
         );
     }
 
-    // Authentication screen - ENHANCED RESPONSIVENESS
+    // Authentication screen - Enhanced with Student ID input
     if (showAuthScreen) {
         return (
             <motion.div
@@ -423,15 +412,15 @@ const AptitudeQuiz = () => {
                 className="max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl 2xl:max-w-2xl mx-auto p-3 sm:p-4 md:p-6 lg:p-8 bg-white rounded-lg shadow-lg my-2 sm:my-4 md:my-8"
             >
                 <div className="text-center mb-4 md:mb-6">
-                    <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-800">Student Authentication</h1>
-                    <p className="text-gray-600 mt-2 text-xs sm:text-sm md:text-base lg:text-lg">Please enter your student code to continue</p>
+                    <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-800">Student Quiz Portal</h1>
+                    <p className="text-gray-600 mt-2 text-xs sm:text-sm md:text-base lg:text-lg">Enter your details to take the aptitude quiz</p>
                 </div>
 
                 <div className="mb-4 sm:mb-6 md:mb-8">
                     <div className="bg-blue-50 p-3 md:p-4 lg:p-5 rounded-lg flex items-start sm:items-center mb-4 md:mb-6">
                         <FontAwesomeIcon icon={faIdCard} className="text-blue-500 text-sm sm:text-base md:text-lg lg:text-xl mr-2 md:mr-3 flex-shrink-0 mt-0.5 sm:mt-0" />
                         <p className="text-blue-700 text-xs sm:text-sm md:text-base">
-                            Enter the unique code displayed on your student dashboard to take the quiz
+                            Enter your student ID and name to begin the quiz. Your results will be visible to your teachers.
                         </p>
                     </div>
 
@@ -443,29 +432,36 @@ const AptitudeQuiz = () => {
 
                     <div className="space-y-3 sm:space-y-4">
                         <div>
-                            <label htmlFor="studentName" className="block text-xs sm:text-sm md:text-base font-medium text-gray-700 mb-1 sm:mb-2">Your Name</label>
+                            <label htmlFor="studentName" className="block text-xs sm:text-sm md:text-base font-medium text-gray-700 mb-1 sm:mb-2">
+                                Your Full Name <span className="text-red-500">*</span>
+                            </label>
                             <input
                                 type="text"
                                 id="studentName"
                                 value={studentName}
                                 onChange={(e) => setStudentName(e.target.value)}
                                 className="w-full p-2 sm:p-3 md:p-4 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-xs sm:text-sm md:text-base lg:text-lg"
-                                placeholder="Enter your name"
+                                placeholder="Enter your full name"
+                                required
                             />
                         </div>
 
                         <div>
-                            <label htmlFor="studentCode" className="block text-xs sm:text-sm md:text-base font-medium text-gray-700 mb-1 sm:mb-2">Student Code</label>
+                            <label htmlFor="studentId" className="block text-xs sm:text-sm md:text-base font-medium text-gray-700 mb-1 sm:mb-2">
+                                Student ID <span className="text-red-500">*</span>
+                            </label>
                             <input
                                 type="text"
-                                id="studentCode"
-                                value={studentCode}
-                                onChange={(e) => setStudentCode(e.target.value)}
-                                className="w-full p-2 sm:p-3 md:p-4 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-xs sm:text-sm md:text-base lg:text-lg"
-                                placeholder="e.g., STU12345"
+                                id="studentId"
+                                value={studentId}
+                                onChange={(e) => setStudentId(e.target.value)}
+                                className="w-full p-2 sm:p-3 md:p-4 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-xs sm:text-sm md:text-base lg:text-lg font-mono"
+                                placeholder="e.g., STU001, 2024CS001, etc."
                                 required
                             />
-                            <p className="mt-1 text-xs sm:text-sm text-gray-500">You can find your code on your student dashboard</p>
+                            <p className="mt-1 text-xs sm:text-sm text-gray-500">
+                                Enter your unique student ID (minimum 3 characters, letters and numbers only)
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -475,11 +471,11 @@ const AptitudeQuiz = () => {
                         whileHover={{ scale: 1.03 }}
                         whileTap={{ scale: 0.97 }}
                         onClick={handleAuthenticate}
-                        disabled={!studentCode || !studentName}
-                        className={`w-full sm:w-auto bg-blue-600 text-white py-2 sm:py-2.5 md:py-3 lg:py-4 px-4 sm:px-6 md:px-8 lg:px-10 rounded-lg font-medium shadow-md transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 text-xs sm:text-sm md:text-base lg:text-lg ${(!studentCode || !studentName) ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-700"
+                        disabled={!studentId || !studentName}
+                        className={`w-full sm:w-auto bg-blue-600 text-white py-2 sm:py-2.5 md:py-3 lg:py-4 px-4 sm:px-6 md:px-8 lg:px-10 rounded-lg font-medium shadow-md transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 text-xs sm:text-sm md:text-base lg:text-lg ${(!studentId || !studentName) ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-700"
                             }`}
                     >
-                        Continue <FontAwesomeIcon icon={faArrowRight} className="ml-2" />
+                        Continue to Quiz <FontAwesomeIcon icon={faArrowRight} className="ml-2" />
                     </motion.button>
                     <button
                         onClick={() => navigate("/student-dashboard")}
@@ -492,7 +488,7 @@ const AptitudeQuiz = () => {
         );
     }
 
-    // Quiz already attempted screen - ENHANCED RESPONSIVENESS
+    // Quiz already attempted screen
     if (hasAttemptedQuiz) {
         return (
             <motion.div
@@ -501,8 +497,14 @@ const AptitudeQuiz = () => {
                 className="max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl 2xl:max-w-2xl mx-auto p-3 sm:p-4 md:p-6 lg:p-8 bg-white rounded-lg shadow-lg my-2 sm:my-4 md:my-8"
             >
                 <div className="text-center mb-4 md:mb-6">
-                    <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-800">Quiz Already Taken</h1>
-                    <p className="text-gray-600 mt-2 text-xs sm:text-sm md:text-base lg:text-lg">You have already attempted this quiz. You cannot take it again.</p>
+                    <FontAwesomeIcon icon={faCheck} className="text-4xl text-green-500 mb-4" />
+                    <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-800">Quiz Already Completed</h1>
+                    <p className="text-gray-600 mt-2 text-xs sm:text-sm md:text-base lg:text-lg">
+                        Student ID <span className="font-mono font-semibold">{studentId}</span> has already completed this quiz.
+                    </p>
+                    <p className="text-gray-500 mt-1 text-xs sm:text-sm md:text-base">
+                        Each student can only take the quiz once. Your results have been recorded.
+                    </p>
                 </div>
                 <div className="text-center">
                     <button
@@ -516,7 +518,7 @@ const AptitudeQuiz = () => {
         );
     }
 
-    // Instructions screen - ENHANCED RESPONSIVENESS
+    // Instructions screen
     if (showInstructions) {
         return (
             <motion.div
@@ -528,7 +530,10 @@ const AptitudeQuiz = () => {
                     <h1 className="text-lg sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-800">Aptitude Quiz</h1>
                     <p className="text-gray-600 mt-1 md:mt-2 text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl">Test your knowledge across various subjects</p>
                     <div className="mt-2 bg-green-50 p-2 lg:p-3 rounded-lg inline-block text-xs sm:text-sm md:text-base">
-                        <p className="text-green-700">Authenticated as: <span className="font-semibold">{studentName}</span> | Code: <span className="font-mono">{studentCode}</span></p>
+                        <p className="text-green-700">
+                            Student: <span className="font-semibold">{studentName}</span> | 
+                            ID: <span className="font-mono font-semibold">{studentId}</span>
+                        </p>
                     </div>
                 </div>
 
@@ -558,6 +563,10 @@ const AptitudeQuiz = () => {
                             <FontAwesomeIcon icon={faTimes} className="text-blue-500 mt-1 mr-2 md:mr-3 flex-shrink-0 text-xs sm:text-sm md:text-base" />
                             <span>There is <span className="font-semibold">no negative marking</span> for wrong answers.</span>
                         </li>
+                        <li className="flex items-start">
+                            <FontAwesomeIcon icon={faIdCard} className="text-blue-500 mt-1 mr-2 md:mr-3 flex-shrink-0 text-xs sm:text-sm md:text-base" />
+                            <span>Your results will be recorded and visible to your teachers.</span>
+                        </li>
                     </ul>
                 </div>
 
@@ -575,7 +584,7 @@ const AptitudeQuiz = () => {
         );
     }
 
-    // Results screen - ENHANCED RESPONSIVENESS
+    // Results screen
     if (showResults) {
         const percentage = Math.round((score / questions.length) * 100);
 
@@ -605,13 +614,23 @@ const AptitudeQuiz = () => {
             >
                 <div className="text-center mb-4 md:mb-8">
                     <FontAwesomeIcon icon={faTrophy} className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl text-yellow-500 mb-2 md:mb-4" />
-                    <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-bold text-gray-800">Quiz Results</h1>
+                    <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-bold text-gray-800">Quiz Completed!</h1>
+                    <div className="mt-2 bg-blue-50 p-2 lg:p-3 rounded-lg inline-block text-xs sm:text-sm md:text-base">
+                        <p className="text-blue-700">
+                            Student: <span className="font-semibold">{studentName}</span> | 
+                            ID: <span className="font-mono font-semibold">{studentId}</span>
+                        </p>
+                    </div>
                     <div className="mt-3 md:mt-4 mb-4 md:mb-6">
                         <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold">{score}/{questions.length}</div>
                         <div className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-semibold mt-1 md:mt-2">{percentage}%</div>
                         <p className={`mt-2 md:mt-4 text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl ${resultColor}`}>{resultMessage}</p>
                     </div>
-                    <span className="text-gray-600 text-xs sm:text-sm md:text-base lg:text-lg">Thanks for your time!</span>
+                    <div className="bg-green-50 border border-green-200 p-3 rounded-lg mb-4">
+                        <p className="text-green-700 text-sm">
+                            ✅ Your quiz has been submitted successfully! Your teacher will be able to see your results.
+                        </p>
+                    </div>
                 </div>
 
                 <div className="mb-4 md:mb-8">
@@ -696,14 +715,14 @@ const AptitudeQuiz = () => {
         );
     }
 
-    // Main quiz screen - ENHANCED RESPONSIVENESS
+    // Main quiz screen
     return (
         <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="max-w-xs sm:max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl mx-auto p-3 sm:p-4 md:p-6 lg:p-8 xl:p-10 bg-white rounded-lg shadow-lg my-2 sm:my-4 md:my-8"
         >
-            {/* Header - ENHANCED RESPONSIVENESS */}
+            {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 md:mb-6 gap-3 sm:gap-0">
                 <div className="w-full sm:w-auto">
                     <h1 className="text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-bold text-gray-800">Aptitude Quiz</h1>
@@ -713,6 +732,9 @@ const AptitudeQuiz = () => {
                         </span>
                         <span className="text-xs sm:text-sm md:text-base text-gray-500">
                             Question {currentQuestion + 1} of {questions.length}
+                        </span>
+                        <span className="text-xs sm:text-sm text-blue-600 font-mono">
+                            {studentId}
                         </span>
                     </div>
                 </div>
@@ -725,7 +747,7 @@ const AptitudeQuiz = () => {
                 </div>
             </div>
 
-            {/* Progress bar - ENHANCED RESPONSIVENESS */}
+            {/* Progress bar */}
             <div className="mb-4 md:mb-6 bg-gray-200 rounded-full h-2 sm:h-2.5 md:h-3 lg:h-4">
                 <div
                     className="bg-blue-600 h-2 sm:h-2.5 md:h-3 lg:h-4 rounded-full transition-all duration-300"
@@ -733,7 +755,7 @@ const AptitudeQuiz = () => {
                 ></div>
             </div>
 
-            {/* Question - ENHANCED RESPONSIVENESS */}
+            {/* Question */}
             <div className="mb-5 md:mb-8">
                 <motion.h2
                     key={currentQuestion}
@@ -744,7 +766,7 @@ const AptitudeQuiz = () => {
                     {questions[currentQuestion].question}
                 </motion.h2>
 
-                {/* Options - ENHANCED RESPONSIVENESS */}
+                {/* Options */}
                 <div className="grid grid-cols-1 gap-2 sm:gap-3 md:gap-4 lg:gap-5">
                     {questions[currentQuestion].options.map((option, index) => (
                         <motion.div
@@ -774,7 +796,7 @@ const AptitudeQuiz = () => {
                 </div>
             </div>
 
-            {/* Navigation - ENHANCED RESPONSIVENESS */}
+            {/* Navigation */}
             <div className="flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-0">
                 <motion.button
                     whileHover={{ scale: 1.05 }}
@@ -828,7 +850,7 @@ const AptitudeQuiz = () => {
                 </div>
             </div>
 
-            {/* Question navigation dots - ENHANCED RESPONSIVENESS */}
+            {/* Question navigation dots */}
             <div className="mt-6 md:mt-8 flex flex-wrap justify-center gap-1 sm:gap-2 md:gap-3">
                 {questions.map((_, index) => (
                     <button

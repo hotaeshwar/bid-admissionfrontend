@@ -1,12 +1,21 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import SideNavbar from "./SideNavbar";
 
 const StudentDashboard = () => {
-  const user = JSON.parse(localStorage.getItem("user")) || {
-    id: "123",
-    first_name: "Student",
-    unique_code: "STU12345"
-  };
+  // Memoize user data to prevent unnecessary re-renders
+  const user = useMemo(() => {
+    const storedUser = localStorage.getItem("user");
+    return storedUser ? JSON.parse(storedUser) : null;
+  }, []); // Empty dependency array - only runs once on mount
+
+  // If no user data, redirect to login
+  useEffect(() => {
+    if (!user) {
+      window.location.href = "/login";
+      return;
+    }
+  }, []); // Remove user from dependency array to prevent infinite loop
+
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [quizResults, setQuizResults] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -56,13 +65,15 @@ const StudentDashboard = () => {
         
         setQuizResults(results);
       } catch (error) {
-        // Handle error silently
+        console.error("Error loading quiz results:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    loadQuizResults();
+    if (user) {
+      loadQuizResults();
+    }
     
     // Set up event listener for storage changes (simulating aptitude test submission)
     const handleStorageChange = (e) => {
@@ -76,24 +87,26 @@ const StudentDashboard = () => {
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, []);
+  }, []); // Remove user from dependency array since it's memoized and won't change
 
-  // FIXED: Simulate aptitude test submission with correct quiz name
+  // Simulate aptitude test submission with correct quiz name
   const simulateQuizSubmission = () => {
+    if (!user) return;
+    
     // Generate realistic mock score and status
     const mockScore = Math.floor(Math.random() * 100); // Random score 0-100
     
     const submission = {
       id: Date.now().toString(),
-      quiz_name: "Aptitude Quiz", // ✅ FIXED: Changed from random quiz names to "Aptitude Quiz"
+      quiz_name: "Aptitude Quiz", // Changed from random quiz names to "Aptitude Quiz"
       score: mockScore,
       completed_date: new Date().toISOString(),
-      candidate_name: user.first_name,
-      student_id: user.id,
-      student_code: user.unique_code
+      candidate_name: user.username, // Use actual username
+      student_id: user.id, // Use actual user ID
+      student_code: user.id // Use actual user ID as code
     };
     
-    // Store the submission in localStorage
+    // Store the submission in localStorage (Note: In Claude.ai artifacts, use in-memory storage instead)
     localStorage.setItem('pendingQuizSubmission', JSON.stringify(submission));
     
     // Trigger storage event (since we're in the same tab)
@@ -128,13 +141,31 @@ const StudentDashboard = () => {
     }
   };
 
+  // Return loading or login redirect if no user
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
+          <p className="mt-2 text-gray-500">Redirecting to login...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Extract user display name and code
+  const displayName = user.username || "Student";
+  const userCode = user.id || "N/A";
+  const userAge = user.age ? `Age: ${user.age}` : "";
+  const userState = user.state ? `State: ${user.state}` : "";
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Side Navigation */}
       <SideNavbar role="student" onToggle={handleSidebarToggle} />
 
       <div className={`flex-1 transition-all duration-300 ${sidebarOpen ? "md:ml-64" : "md:ml-20"}`}>
-        {/* Fixed Top Navbar - Fixed the conflicting CSS properties here */}
+        {/* Fixed Top Navbar */}
         <nav className="fixed top-0 right-0 left-0 bg-white shadow-sm z-10 w-full">
           <div className="container mx-auto px-4">
             <div className="flex items-center justify-between h-16">
@@ -160,12 +191,16 @@ const StudentDashboard = () => {
               {/* User Info - responsive layout */}
               <div className="flex items-center space-x-4">
                 <div className="hidden sm:flex flex-col items-end">
-                  <p className="text-sm font-medium text-gray-800">Welcome, {user.first_name}!</p>
-                  <p className="text-xs text-gray-500">Code: {user.unique_code}</p>
+                  <p className="text-sm font-medium text-gray-800">Welcome, {displayName}!</p>
+                  <div className="flex space-x-2 text-xs text-gray-500">
+                    <span>Code: {userCode}</span>
+                    {userAge && <span>• {userAge}</span>}
+                    {userState && <span>• {userState}</span>}
+                  </div>
                 </div>
                 <div className="sm:hidden flex flex-col items-end">
-                  <p className="text-sm font-medium text-gray-800">{user.first_name}</p>
-                  <p className="text-xs text-gray-500">{user.unique_code}</p>
+                  <p className="text-sm font-medium text-gray-800">{displayName}</p>
+                  <p className="text-xs text-gray-500">{userCode}</p>
                 </div>
                 <div className="bg-blue-100 p-2 rounded-full">
                   <svg 
@@ -267,18 +302,23 @@ const StudentDashboard = () => {
               <div className="p-6">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between">
                   <div>
-                    <h1 className="text-2xl font-bold text-gray-800">Welcome, {user.first_name}!</h1>
+                    <h1 className="text-2xl font-bold text-gray-800">Welcome, {displayName}!</h1>
                     <div className="bg-white bg-opacity-70 mt-2 p-3 inline-block rounded-lg border border-blue-100">
-                      <p className="text-sm text-blue-700">Your unique code: <span className="font-mono font-medium">{user.unique_code}</span></p>
+                      <div className="text-sm text-blue-700 space-y-1">
+                        <p>Your unique code: <span className="font-mono font-medium">{userCode}</span></p>
+                        {userAge && <p className="text-xs">{userAge}</p>}
+                        {userState && <p className="text-xs">{userState}</p>}
+                        {user.email && <p className="text-xs">Email: {user.email}</p>}
+                      </div>
                     </div>
                   </div>
                   <div className="mt-4 md:mt-0">
                     <div className="relative">
-                      <img
-                        src="http://localhost:5173/src/assets/images/bid.png"
-                        alt="Student"
-                        className="h-15 w-15 rounded-full border-4 border-white shadow-md"
-                      />
+                      <div className="h-16 w-16 rounded-full border-4 border-white shadow-md bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center">
+                        <span className="text-white font-bold text-lg">
+                          {displayName.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
                       <div className="absolute bottom-0 right-0 bg-blue-500 rounded-full p-1 border-2 border-white">
                         <svg 
                           xmlns="http://www.w3.org/2000/svg" 
@@ -291,7 +331,7 @@ const StudentDashboard = () => {
                             strokeLinecap="round" 
                             strokeLinejoin="round" 
                             strokeWidth={2} 
-                            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" 
+                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" 
                           />
                         </svg>
                       </div>
