@@ -48,10 +48,43 @@ const Register = () => {
 
   // Fetch states and roles on component mount
   useEffect(() => {
+<<<<<<< HEAD
+=======
+    const fetchStates = async () => {
+      try {
+        console.log("🔄 Starting to fetch states...");
+        const response = await axios.get("https://admissionapi.buildingindiadigital.com/auth/states");
+        
+        console.log("📡 Full API Response:", response);
+        console.log("📊 Response Data:", response.data);
+        console.log("✅ Response Success Status:", response.data.success);
+        console.log("🏛️ States Data:", response.data.data);
+        console.log("📏 Number of states received:", response.data.data ? response.data.data.length : 0);
+        
+        if (response.data.success) {
+          console.log("✅ Setting states to state variable");
+          setStates(response.data.data);
+          console.log("🔍 States after setting:", response.data.data);
+        } else {
+          console.log("❌ API returned success: false");
+          console.log("📝 Error message from API:", response.data.message);
+        }
+      } catch (err) {
+        console.error("❌ Failed to fetch states:", err);
+        console.error("📋 Error details:", err.response);
+        console.error("📋 Error message:", err.message);
+        if (err.response) {
+          console.error("📋 Error status:", err.response.status);
+          console.error("📋 Error data:", err.response.data);
+        }
+      }
+    };
+>>>>>>> f6d0c78ce464eef595e72cfc858025d0a9bd7623
     fetchStates();
     fetchRoles();
   }, []);
 
+<<<<<<< HEAD
   // Update selected role data when role changes
   useEffect(() => {
     if (roles.length > 0 && formData.role) {
@@ -140,6 +173,17 @@ const Register = () => {
       setSelectedRoleData(defaultRole);
     }
   };
+=======
+  // Add useEffect to monitor states changes
+  useEffect(() => {
+    console.log("🔄 States updated:", states);
+    console.log("📏 Current states length:", states.length);
+    if (states.length > 0) {
+      console.log("🎯 First state example:", states[0]);
+      console.log("🔑 Keys in first state:", Object.keys(states[0]));
+    }
+  }, [states]);
+>>>>>>> f6d0c78ce464eef595e72cfc858025d0a9bd7623
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -264,6 +308,7 @@ const Register = () => {
     try {
       let response;
 
+<<<<<<< HEAD
       if (formData.role === "admin") {
         // Admin registration - JSON payload to /admin/register
         const adminData = {
@@ -272,6 +317,13 @@ const Register = () => {
           password: formData.password,
           admin_secret_key: formData.admin_secret_key.trim()
         };
+=======
+      const response = await axios.post("https://admissionapi.buildingindiadigital.com/auth/register", formDataObj, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+>>>>>>> f6d0c78ce464eef595e72cfc858025d0a9bd7623
 
         response = await axios.post(`${API_BASE_URL}/admin/register`, adminData, {
           headers: {
@@ -470,10 +522,32 @@ const Register = () => {
                     className="w-full pl-10 pr-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-[#FF9933] focus:border-[#138808] transition duration-300 text-sm"
                     placeholder="Enter username"
                     required
+<<<<<<< HEAD
                     disabled={loading}
                     minLength="3"
                     maxLength="50"
                   />
+=======
+                  >
+                    <option value="" disabled>Select your state</option>
+                    {/* Add debug info in the dropdown rendering */}
+                    {console.log("🎯 Rendering dropdown options. States array:", states)}
+                    {states.length === 0 && console.log("⚠️ States array is empty during render")}
+                    {states.map((state, index) => {
+                      console.log(`🏛️ Rendering state ${index}:`, state);
+                      return (
+                        <option key={state.id} value={state.name}>
+                          {state.name}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-700">
+                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                      <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                    </svg>
+                  </div>
+>>>>>>> f6d0c78ce464eef595e72cfc858025d0a9bd7623
                 </div>
               </div>
 
