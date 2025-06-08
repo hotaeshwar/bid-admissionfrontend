@@ -50,7 +50,7 @@ const Register = () => {
   const navigate = useNavigate();
 
   // API base URL
-  const API_BASE_URL = "https://admissionapi.buildingindiadigital.com"
+  const API_BASE_URL = "http://127.0.0.1:8000"
   
 
   // Fetch states and roles on component mount
@@ -121,10 +121,11 @@ const Register = () => {
       const roleData = roles.find(r => r.id === formData.role);
       setSelectedRoleData(roleData);
       
-      // Clear fields not needed for admin role (but keep mobile_number)
+      // Clear fields not needed for admin role (including mobile_number)
       if (formData.role === "admin") {
         setFormData(prev => ({
           ...prev,
+          mobile_number: "", // Completely clear mobile number for admin
           state_id: "",
           city_id: "",
           document: null
@@ -158,7 +159,7 @@ const Register = () => {
           id: "admin",
           name: "Administrator",
           description: "System administrator with full access",
-          requirements: ["username", "email", "password", "mobile", "admin_secret_key"],
+          requirements: ["username", "email", "password", "admin_secret_key"], // No mobile for admin
           requires_document: false,
           requires_state: false,
           requires_admin_key: true,
@@ -256,13 +257,13 @@ const Register = () => {
     if (!formData.email.trim()) missingFields.push("Email");
     if (!formData.password.trim()) missingFields.push("Password");
     
-    // Mobile number is now required for all roles including admin
-    if (!formData.mobile_number.trim()) {
+    // Mobile number is only required for teacher and student roles, NOT for admin
+    if (formData.role !== "admin" && !formData.mobile_number.trim()) {
       missingFields.push("Mobile Number");
     }
     
-    // Validate mobile number format (Indian format) for all roles
-    if (formData.mobile_number.trim()) {
+    // Validate mobile number format (Indian format) only for non-admin roles
+    if (formData.role !== "admin" && formData.mobile_number.trim()) {
       const mobileRegex = /^[6-9]\d{9}$/;
       if (!mobileRegex.test(formData.mobile_number.trim())) {
         setError("Mobile number must be 10 digits starting with 6, 7, 8, or 9");
@@ -335,15 +336,16 @@ const Register = () => {
       let response;
 
       if (formData.role === "admin") {
-        // Admin registration using the dedicated admin endpoint
-        // Note: Backend needs to be updated to accept mobile_number for admin
+        // Admin registration using the dedicated admin endpoint - NO mobile_number
         const adminData = {
           username: formData.username.trim(),
           email: formData.email.trim(),
           password: formData.password,
-          mobile_number: formData.mobile_number.trim(), // Include mobile for admin
           admin_secret_key: formData.admin_secret_key.trim()
+          // IMPORTANT: Do NOT include mobile_number for admin registration
         };
+
+        console.log("Sending admin data:", adminData); // Debug log
 
         response = await axios.post(`${API_BASE_URL}/admin/register`, adminData, {
           headers: {
@@ -374,7 +376,7 @@ const Register = () => {
         
         // Show success message based on role
         if (formData.role === "admin") {
-          alert(`Admin registration successful! Welcome ${userData.username}. Admin ID: ${userData.admin_id}. Please login to continue.`);
+          alert(`Admin registration successful! Welcome ${userData.username}. Admin ID: ${userData.admin_id || userData.id}. Please login to continue.`);
         } else {
           const ageInfo = userData.age ? ` Age detected: ${userData.age} years.` : "";
           const locationInfo = userData.location ? ` Location: ${userData.location.city}, ${userData.location.state}.` : "";
@@ -387,11 +389,16 @@ const Register = () => {
         setError(response.data.message || "Registration failed");
       }
     } catch (err) {
+      console.error("Registration error:", err); // Debug log
+      console.error("Error response:", err.response); // Debug log
+      console.error("Error data:", err.response?.data); // Debug log
+      console.error("Error status:", err.response?.status); // Debug log
+      
       if (err.response?.status === 400) {
         const errorMessage = err.response.data.detail || err.response.data.message || "Registration failed. Please check your details.";
         setError(errorMessage);
       } else if (err.response?.status === 403) {
-        setError("Access denied. Invalid admin secret key. Please contact system administrator.");
+        setError("Access denied. Invalid admin secret key or admin registration limit exceeded. Please contact system administrator.");
       } else if (err.response?.status === 422) {
         const validationErrors = err.response.data.detail;
         if (Array.isArray(validationErrors)) {
@@ -441,7 +448,7 @@ const Register = () => {
     
     switch (fieldType) {
       case 'mobile':
-        return true; // Now show mobile field for all roles including admin
+        return formData.role !== "admin"; // Hide mobile field for admin role
       case 'state':
         return selectedRoleData.requires_state;
       case 'city':
@@ -465,7 +472,7 @@ const Register = () => {
             alt="BID Admission Logo" 
             className="mx-auto max-h-16 object-contain mb-3"
           />
-          <h2 className="text-2xl font-bold text-white">Join BID Admission and start your journey</h2>
+          <h2 className="text-2xl font-bold text-white">Join BiD Admission and start your journey</h2>
         </div>
 
         {/* Form Content */}
@@ -621,7 +628,7 @@ const Register = () => {
                 </div>
               </div>
 
-              {/* Mobile Number - Now shown for all roles including admin */}
+              {/* Mobile Number - Hidden for admin, shown for teacher/student */}
               {shouldShowField('mobile') && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">

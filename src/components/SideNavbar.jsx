@@ -8,13 +8,22 @@ import {
   faChevronRight,
   faCompass,
   faBrain,
-  faHome
+  faHome,
+  faChalkboardTeacher,
+  faUserShield,
+  faUsers,
+  faClipboardList,
+  faVideo
 } from "@fortawesome/free-solid-svg-icons";
 
-const SideNavbar = ({ role = "user", onToggle }) => {
+const SideNavbar = ({ onToggle }) => {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(true);
   const [isHovering, setIsHovering] = useState(false);
+  
+  // Get user data from localStorage to determine role
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const userRole = user.role || "student"; // Default to student if no role found
 
   // For mobile toggle
   const handleToggleSidebar = () => {
@@ -43,7 +52,8 @@ const SideNavbar = ({ role = "user", onToggle }) => {
 
   const handleLogout = () => {
     localStorage.removeItem("user");
-    navigate("/");
+    localStorage.removeItem("access_token");
+    navigate("/"); // Navigate back to login page
   };
 
   const toggleSidebar = () => {
@@ -51,10 +61,110 @@ const SideNavbar = ({ role = "user", onToggle }) => {
     setIsHovering(false);
   };
 
-  // Safely get role with fallback
-  const safeRole = role || "user";
-  const isStudent = safeRole.toLowerCase() === "student";
-  
+  // Get dashboard route based on user role
+  const getDashboardRoute = () => {
+    switch (userRole) {
+      case "admin":
+        return "/admin-dashboard";
+      case "teacher":
+        return "/teacher-dashboard";
+      case "student":
+        return "/student-dashboard";
+      default:
+        return "/student-dashboard";
+    }
+  };
+
+  // Get dashboard title based on user role
+  const getDashboardTitle = () => {
+    switch (userRole) {
+      case "admin":
+        return "Admin Dashboard";
+      case "teacher":
+        return "Teacher Dashboard";
+      case "student":
+        return "Student Dashboard";
+      default:
+        return "Dashboard";
+    }
+  };
+
+  // Get role-specific navigation items
+  const getRoleSpecificNavItems = () => {
+    const navItems = [];
+
+    // Only admin gets navigation links, teachers and students only get logout
+    if (userRole === "admin") {
+      // Dashboard link for admin
+      navItems.push(
+        <li key="dashboard">
+          <Link
+            to={getDashboardRoute()}
+            className="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-all duration-200 text-gray-300 hover:text-white hover:translate-x-1 group"
+          >
+            <FontAwesomeIcon icon={faHome} className="text-lg text-gray-400 group-hover:text-white" />
+            <span className={`ml-3 ${!isOpen && !isHovering && "md:hidden"}`}>Dashboard</span>
+          </Link>
+        </li>
+      );
+
+      navItems.push(
+        <li key="users">
+          <Link
+            to="/admin/users"
+            className="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-all duration-200 text-gray-300 hover:text-white hover:translate-x-1 group"
+          >
+            <FontAwesomeIcon icon={faUsers} className="text-lg text-blue-400 group-hover:text-white" />
+            <span className={`ml-3 ${!isOpen && !isHovering && "md:hidden"}`}>Manage Users</span>
+          </Link>
+        </li>
+      );
+
+      navItems.push(
+        <li key="test-results">
+          <Link
+            to="/admin/test-results"
+            className="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-all duration-200 text-gray-300 hover:text-white hover:translate-x-1 group"
+          >
+            <FontAwesomeIcon icon={faClipboardList} className="text-lg text-yellow-400 group-hover:text-white" />
+            <span className={`ml-3 ${!isOpen && !isHovering && "md:hidden"}`}>Test Results</span>
+          </Link>
+        </li>
+      );
+
+      navItems.push(
+        <li key="meetings-admin">
+          <Link
+            to="/admin/meetings"
+            className="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-all duration-200 text-gray-300 hover:text-white hover:translate-x-1 group"
+          >
+            <FontAwesomeIcon icon={faVideo} className="text-lg text-green-400 group-hover:text-white" />
+            <span className={`ml-3 ${!isOpen && !isHovering && "md:hidden"}`}>All Meetings</span>
+          </Link>
+        </li>
+      );
+    }
+
+    // For teachers and students, no navigation links are added here
+    // Only the logout button will be shown
+
+    return navItems;
+  };
+
+  // Get role icon
+  const getRoleIcon = () => {
+    switch (userRole) {
+      case "admin":
+        return faUserShield;
+      case "teacher":
+        return faChalkboardTeacher;
+      case "student":
+        return faCompass;
+      default:
+        return faCompass;
+    }
+  };
+
   return (
     <>
       {/* Mobile toggle button - visible on small screens */}
@@ -94,50 +204,33 @@ const SideNavbar = ({ role = "user", onToggle }) => {
           />
         </button>
 
-        {/* Dashboard header - replaced tachometer with compass */}
+        {/* Dashboard header - Dynamic based on role */}
         <div className="p-4 flex items-center justify-center md:justify-start space-x-3 border-b border-gray-700">
-          <FontAwesomeIcon icon={faCompass} className="text-blue-400 text-xl" />
+          <FontAwesomeIcon icon={getRoleIcon()} className="text-blue-400 text-xl" />
           <h2 className={`text-xl font-bold ${!isOpen && !isHovering && "md:hidden"}`}>
-            {safeRole.charAt(0).toUpperCase() + safeRole.slice(1)} Dashboard
+            {getDashboardTitle()}
           </h2>
+        </div>
+
+        {/* User info section */}
+        <div className={`p-4 border-b border-gray-700 ${!isOpen && !isHovering && "md:hidden"}`}>
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+              <FontAwesomeIcon icon={getRoleIcon()} className="text-white text-sm" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-white">{user.username || "User"}</p>
+              <p className="text-xs text-gray-400 capitalize">{userRole}</p>
+            </div>
+          </div>
         </div>
 
         {/* Nav items */}
         <div className="p-4">
           <ul className="space-y-2">
-            {/* Dashboard link - Updated to always use /student-dashboard */}
-            <li>
-              <Link
-                to="/student-dashboard"
-                className="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-all duration-200 text-gray-300 hover:text-white hover:translate-x-1 group"
-              >
-                <FontAwesomeIcon icon={faHome} className="text-lg text-gray-400 group-hover:text-white" />
-                <span className={`ml-3 ${!isOpen && !isHovering && "md:hidden"}`}>Dashboard</span>
-              </Link>
-            </li>
+            {getRoleSpecificNavItems()}
             
-            {/* Aptitude Quiz Link - Only for students */}
-            {isStudent && (
-              <li>
-                <Link
-                  to="/aptitude-quiz"
-                  className="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-all duration-200 text-gray-300 hover:text-white hover:translate-x-1 group relative"
-                >
-                  <FontAwesomeIcon icon={faBrain} className="text-lg text-blue-400 group-hover:text-white" />
-                  <span className={`ml-3 ${!isOpen && !isHovering && "md:hidden"}`}>Aptitude Quiz</span>
-                  {!isOpen && !isHovering && (
-                    <div className="absolute left-14 bg-blue-600 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                      Aptitude Quiz
-                    </div>
-                  )}
-                  <span className="absolute top-0 right-0 -mt-1 -mr-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    New
-                  </span>
-                </Link>
-              </li>
-            )}
-            
-            {/* Logout button */}
+            {/* Logout button - Available for all roles */}
             <li>
               <button
                 onClick={handleLogout}

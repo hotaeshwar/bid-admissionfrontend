@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { AlertCircle, CheckCircle, Mail, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { AlertCircle, CheckCircle, Mail, ArrowLeft, Eye, EyeOff, User, AtSign, LogIn } from 'lucide-react';
 
 const ForgotPassword = () => {
+  const navigate = useNavigate();
   const [step, setStep] = useState(1); // 1: Request Reset, 2: Enter Token, 3: New Password
   const [formData, setFormData] = useState({
-    username: '',
+    identifier: '', // Changed from username to identifier
     token: '',
     newPassword: '',
     confirmPassword: ''
@@ -13,9 +15,10 @@ const ForgotPassword = () => {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [resetToken, setResetToken] = useState(''); // New state for reset token
+  const [resetToken, setResetToken] = useState('');
+  const [userInfo, setUserInfo] = useState({ username: '', email: '' }); // Store user info from response
 
-  const API_BASE = 'https://admissionapi.buildingindiadigital.com'; // Update with your API URL
+  const API_BASE = 'http://127.0.0.1:8000';
 
   const handleInputChange = (e) => {
     setFormData({
@@ -33,9 +36,38 @@ const ForgotPassword = () => {
     setTimeout(() => setMessage({ type: '', text: '' }), 5000);
   };
 
+  // Helper function to detect if input is email or username
+  const isEmail = (str) => {
+    return str.includes('@') && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str);
+  };
+
+  // Helper function to validate username format
+  const isValidUsername = (str) => {
+    return /^[a-zA-Z0-9_]+$/.test(str);
+  };
+
+  const validateIdentifier = (identifier) => {
+    if (!identifier.trim()) {
+      return 'Please enter your username or email';
+    }
+    
+    if (isEmail(identifier)) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) {
+        return 'Please enter a valid email address';
+      }
+    } else {
+      if (!isValidUsername(identifier)) {
+        return 'Username can only contain letters, numbers, and underscores';
+      }
+    }
+    
+    return null;
+  };
+
   const requestPasswordReset = async () => {
-    if (!formData.username.trim()) {
-      showMessage('error', 'Please enter your username');
+    const validationError = validateIdentifier(formData.identifier);
+    if (validationError) {
+      showMessage('error', validationError);
       return;
     }
 
@@ -46,17 +78,27 @@ const ForgotPassword = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username: formData.username.trim() }),
+        body: JSON.stringify({ identifier: formData.identifier.trim() }), // Changed to identifier
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        setResetToken(data.reset_token); // Store the reset token
+        setResetToken(data.reset_token);
         setFormData(prev => ({
           ...prev,
-          token: data.reset_token // Auto-fill the token field
+          token: data.reset_token
         }));
+        
+        // Extract username and email from the response message
+        const messageMatch = data.message.match(/user '([^']+)' \(email: ([^)]+)\)/);
+        if (messageMatch) {
+          setUserInfo({
+            username: messageMatch[1],
+            email: messageMatch[2]
+          });
+        }
+        
         showMessage('success', 'Reset token generated successfully!');
         setStep(2);
       } else {
@@ -81,6 +123,13 @@ const ForgotPassword = () => {
       const data = await response.json();
 
       if (data.success && data.data.valid) {
+        // Update user info from validation response
+        if (data.data.username && data.data.email) {
+          setUserInfo({
+            username: data.data.username,
+            email: data.data.email
+          });
+        }
         showMessage('success', 'Token is valid! You can now set your new password.');
         setStep(3);
       } else {
@@ -129,8 +178,9 @@ const ForgotPassword = () => {
         // Reset form after successful password reset
         setTimeout(() => {
           setStep(1);
-          setFormData({ username: '', token: '', newPassword: '', confirmPassword: '' });
-          setResetToken(''); // Clear the stored token
+          setFormData({ identifier: '', token: '', newPassword: '', confirmPassword: '' });
+          setResetToken('');
+          setUserInfo({ username: '', email: '' });
         }, 3000);
       } else {
         showMessage('error', data.message || 'Failed to reset password');
@@ -178,6 +228,12 @@ const ForgotPassword = () => {
     );
   };
 
+  // Get the appropriate icon based on input content
+  const getIdentifierIcon = () => {
+    if (!formData.identifier) return <User className="w-4 h-4 sm:w-5 sm:h-5" />;
+    return isEmail(formData.identifier) ? <AtSign className="w-4 h-4 sm:w-5 sm:h-5" /> : <User className="w-4 h-4 sm:w-5 sm:h-5" />;
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-sm sm:max-w-md lg:max-w-lg bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
@@ -191,7 +247,7 @@ const ForgotPassword = () => {
             {step === 3 && "Set New Password"}
           </h1>
           <p className="text-blue-100 text-xs sm:text-sm px-2">
-            {step === 1 && "Enter your username to receive a reset token"}
+            {step === 1 && "Enter your username or email to receive a reset token"}
             {step === 2 && "Check your token and enter it below"}
             {step === 3 && "Create your new secure password"}
           </p>
@@ -203,20 +259,29 @@ const ForgotPassword = () => {
           {step === 1 && (
             <div className="space-y-4 sm:space-y-6">
               <div>
-                <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
-                  Username
+                <label htmlFor="identifier" className="block text-sm font-medium text-gray-700 mb-2">
+                  Username or Email
                 </label>
-                <input
-                  type="text"
-                  id="username"
-                  name="username"
-                  value={formData.username}
-                  onChange={handleInputChange}
-                  onKeyPress={(e) => handleKeyPress(e, requestPasswordReset)}
-                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm sm:text-base"
-                  placeholder="Enter your username"
-                  disabled={loading}
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    id="identifier"
+                    name="identifier"
+                    value={formData.identifier}
+                    onChange={handleInputChange}
+                    onKeyPress={(e) => handleKeyPress(e, requestPasswordReset)}
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 pl-10 sm:pl-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm sm:text-base"
+                    placeholder="Enter your username or email"
+                    disabled={loading}
+                  />
+                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                    {getIdentifierIcon()}
+                  </div>
+                </div>
+                <div className="mt-2 text-xs text-gray-500 space-y-1">
+                  <p>• Use your username (e.g., john_doe) or email (e.g., john@example.com)</p>
+                  <p>• Both uppercase and lowercase letters are accepted</p>
+                </div>
               </div>
 
               <button
@@ -234,11 +299,32 @@ const ForgotPassword = () => {
                   'Send Reset Token'
                 )}
               </button>
+
+              {/* Back to Login Button */}
+              <div className="text-center">
+                <button
+                  onClick={() => navigate('/login')}
+                  className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition-colors"
+                >
+                  <LogIn className="w-4 h-4" />
+                  Back to Login
+                </button>
+              </div>
             </div>
           )}
 
           {step === 2 && (
             <div className="space-y-4 sm:space-y-6">
+              {userInfo.username && userInfo.email && (
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <h3 className="text-sm font-medium text-gray-700 mb-2">Account Found:</h3>
+                  <div className="space-y-1 text-sm text-gray-600">
+                    <p><span className="font-medium">Username:</span> {userInfo.username}</p>
+                    <p><span className="font-medium">Email:</span> {userInfo.email}</p>
+                  </div>
+                </div>
+              )}
+
               {resetToken && (
                 <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                   <p className="text-sm text-gray-700 mb-2">Your Reset Token:</p>
@@ -306,11 +392,34 @@ const ForgotPassword = () => {
                   )}
                 </button>
               </div>
+
+              {/* Back to Login Button */}
+              <div className="text-center">
+                <button
+                  onClick={() => navigate('/login')}
+                  className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition-colors"
+                >
+                  <LogIn className="w-4 h-4" />
+                  Back to Login
+                </button>
+              </div>
             </div>
           )}
 
           {step === 3 && (
             <div className="space-y-4 sm:space-y-6">
+              {userInfo.username && userInfo.email && (
+                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                  <h3 className="text-sm font-medium text-green-700 mb-2">
+                    Resetting password for:
+                  </h3>
+                  <div className="space-y-1 text-sm text-green-600">
+                    <p><span className="font-medium">Username:</span> {userInfo.username}</p>
+                    <p><span className="font-medium">Email:</span> {userInfo.email}</p>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-2">
                   New Password
@@ -387,6 +496,17 @@ const ForgotPassword = () => {
                   ) : (
                     'Reset Password'
                   )}
+                </button>
+              </div>
+
+              {/* Back to Login Button */}
+              <div className="text-center">
+                <button
+                  onClick={() => navigate('/login')}
+                  className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition-colors"
+                >
+                  <LogIn className="w-4 h-4" />
+                  Back to Login
                 </button>
               </div>
             </div>

@@ -41,7 +41,7 @@ const Login = () => {
   const navigate = useNavigate();
 
   // API base URL
-  const API_BASE_URL = "https://admissionapi.buildingindiadigital.com";
+  const API_BASE_URL = "http://127.0.0.1:8000";
 
   // Check if user is already logged in
   useEffect(() => {
@@ -72,7 +72,8 @@ const Login = () => {
         setFormData(prev => ({
           ...prev,
           state_id: "",
-          city_id: ""
+          city_id: "",
+          mobile_number: "" // Clear mobile number for admin
         }));
         setCities([]);
       }
@@ -135,7 +136,7 @@ const Login = () => {
           name: "Administrator",
           description: "System administrator with full access",
           requires_state: false,
-          requires_mobile: true // Added mobile requirement for admin
+          requires_mobile: false // Changed to false - admin doesn't need mobile for login
         },
         {
           id: "teacher", 
@@ -202,8 +203,8 @@ const Login = () => {
       return false;
     }
     
-    // Mobile number validation for admin
-    if (selectedRoleData?.requires_mobile || formData.role === "admin") {
+    // Mobile number validation - only for roles that require it (admin no longer requires it)
+    if (selectedRoleData?.requires_mobile) {
       if (!formData.mobile_number.trim()) {
         setError("Please enter your mobile number");
         return false;
@@ -249,8 +250,8 @@ const Login = () => {
         role: formData.role
       };
 
-      // Add mobile_number for admin
-      if (formData.role === "admin" && formData.mobile_number.trim()) {
+      // Add mobile_number only if required for the role (admin no longer needs it)
+      if (selectedRoleData?.requires_mobile && formData.mobile_number.trim()) {
         loginData.mobile_number = formData.mobile_number.trim();
       }
 
@@ -357,7 +358,7 @@ const Login = () => {
   const getRoleRequirements = (role) => {
     switch (role) {
       case "admin":
-        return "Full system access (requires mobile number)";
+        return "Full system access (username & password only)"; // Updated description
       case "teacher":
         return "Age ≥20 (requires state & city selection)";
       case "student":
@@ -369,7 +370,7 @@ const Login = () => {
 
   // Helper function to check if mobile field should be shown
   const shouldShowMobileField = () => {
-    return formData.role === "admin" || selectedRoleData?.requires_mobile;
+    return selectedRoleData?.requires_mobile && formData.role !== "admin"; // Exclude admin
   };
 
   return (
@@ -474,9 +475,9 @@ const Login = () => {
                       <span>{selectedRoleData.description}</span>
                     </div>
                     {formData.role === "admin" && (
-                      <div className="mt-1 text-xs text-orange-600 flex items-center space-x-1">
-                        <FontAwesomeIcon icon={faPhone} />
-                        <span>Admin requires mobile number for login</span>
+                      <div className="mt-1 text-xs text-green-600 flex items-center space-x-1">
+                        <FontAwesomeIcon icon={faUserShield} />
+                        <span>Admin login requires only username and password</span>
                       </div>
                     )}
                     {formData.role === "student" && (
@@ -513,7 +514,7 @@ const Login = () => {
                 </div>
               </div>
 
-              {/* Mobile Number Input - Show for admin */}
+              {/* Mobile Number Input - Hide for admin */}
               {shouldShowMobileField() && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
